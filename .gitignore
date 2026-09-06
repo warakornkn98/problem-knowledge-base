@@ -1,0 +1,19 @@
+# Env
+.env
+
+# Backend
+backend/bin/
+backend/tmp/
+backend/*.exe
+*.out
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
