@@ -33,7 +33,7 @@ docker compose up -d --build
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:3000 |
+| Frontend | http://localhost:3000 (set `FRONTEND_PORT` if 3000 is taken) |
 | API | http://localhost:8080/api |
 | Health | http://localhost:8080/health |
 | PostgreSQL | localhost:5432 |
