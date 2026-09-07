@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -88,6 +89,31 @@ func (r *StepRepository) Delete(ctx context.Context, problemID, stepID int64) er
 		}
 		// Compact the remaining step numbers: 1..N with no gaps.
 		return renumber(tx, problemID)
+	})
+}
+
+func (r *StepRepository) ReplaceAll(ctx context.Context, problemID int64, steps []domain.StepDraft) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("problem_id = ?", problemID).Delete(&stepModel{}).Error; err != nil {
+			return err
+		}
+		n := 0
+		for _, s := range steps {
+			action := strings.TrimSpace(s.Action)
+			if action == "" {
+				continue
+			}
+			n++
+			if err := tx.Create(&stepModel{
+				ProblemID: problemID,
+				StepNo:    n,
+				Action:    action,
+				Result:    strings.TrimSpace(s.Result),
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

@@ -98,6 +98,10 @@ func (f *fakeSteps) Update(context.Context, int64, int64, string, string, *int) 
 }
 func (f *fakeSteps) Delete(context.Context, int64, int64) error    { return nil }
 func (f *fakeSteps) Reorder(context.Context, int64, []int64) error { return nil }
+func (f *fakeSteps) ReplaceAll(_ context.Context, _ int64, steps []domain.StepDraft) error {
+	f.appended += len(steps)
+	return nil
+}
 
 type fakeRelated struct{}
 

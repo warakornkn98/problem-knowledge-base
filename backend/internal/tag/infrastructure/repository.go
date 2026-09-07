@@ -118,13 +118,19 @@ func (r *Repository) List(ctx context.Context, query string, withCounts bool) ([
 		return out, nil
 	}
 
+	// Flat scan target (see the category repo for why the embedded struct is
+	// avoided on aggregate queries).
 	type row struct {
-		tagModel
+		ID         int64
+		Name       string
+		Slug       string
+		CreatedAt  time.Time
+		UpdatedAt  time.Time
 		UsageCount int64
 	}
 	q := r.db.WithContext(ctx).
 		Table("tags AS t").
-		Select("t.*, COUNT(pt.problem_id) AS usage_count").
+		Select("t.id, t.name, t.slug, t.created_at, t.updated_at, COUNT(pt.problem_id) AS usage_count").
 		Joins("LEFT JOIN problem_tags pt ON pt.tag_id = t.id").
 		Group("t.id").
 		Order("usage_count DESC, t.name ASC")
@@ -137,9 +143,14 @@ func (r *Repository) List(ctx context.Context, query string, withCounts bool) ([
 	}
 	out := make([]domain.Tag, len(rows))
 	for i, rw := range rows {
-		t := rw.tagModel.toDomain()
-		t.UsageCount = rw.UsageCount
-		out[i] = t
+		out[i] = domain.Tag{
+			ID:         rw.ID,
+			Name:       rw.Name,
+			Slug:       rw.Slug,
+			CreatedAt:  rw.CreatedAt,
+			UpdatedAt:  rw.UpdatedAt,
+			UsageCount: rw.UsageCount,
+		}
 	}
 	return out, nil
 }

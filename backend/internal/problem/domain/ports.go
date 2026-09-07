@@ -92,6 +92,12 @@ type Repository interface {
 	DistinctProjects(ctx context.Context) ([]string, error)
 }
 
+// StepDraft is an ordered (action, result) pair used for bulk replacement.
+type StepDraft struct {
+	Action string
+	Result string
+}
+
 // StepRepository is the persistence port for troubleshooting steps.
 type StepRepository interface {
 	List(ctx context.Context, problemID int64) ([]Step, error)
@@ -99,6 +105,10 @@ type StepRepository interface {
 	Update(ctx context.Context, problemID, stepID int64, action, result string, stepNo *int) (*Step, error)
 	Delete(ctx context.Context, problemID, stepID int64) error
 	Reorder(ctx context.Context, problemID int64, orderedIDs []int64) error
+
+	// ReplaceAll drops every step for the problem and re-inserts the given
+	// drafts as steps 1..N. Empty actions are skipped by the caller.
+	ReplaceAll(ctx context.Context, problemID int64, steps []StepDraft) error
 }
 
 // RelatedRepository is the persistence port for problem-to-problem links.

@@ -116,8 +116,10 @@ func (s *Service) Create(ctx context.Context, in WriteInput, steps []StepInput) 
 	return s.Get(ctx, id)
 }
 
-// Update mutates an existing problem.
-func (s *Service) Update(ctx context.Context, id int64, in WriteInput) (*domain.Problem, error) {
+// Update mutates an existing problem. When steps is non-nil the whole
+// troubleshooting-step list is replaced with it (empty actions dropped); nil
+// leaves the existing steps untouched.
+func (s *Service) Update(ctx context.Context, id int64, in WriteInput, steps *[]StepInput) (*domain.Problem, error) {
 	existing, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, mapRepoErr(err)
@@ -164,6 +166,16 @@ func (s *Service) Update(ctx context.Context, id int64, in WriteInput) (*domain.
 		}
 	}
 
+	if steps != nil {
+		drafts := make([]domain.StepDraft, 0, len(*steps))
+		for _, st := range *steps {
+			drafts = append(drafts, domain.StepDraft{Action: st.Action, Result: st.Result})
+		}
+		if err := s.steps.ReplaceAll(ctx, id, drafts); err != nil {
+			return nil, httpx.NewInternal(err)
+		}
+	}
+
 	return s.Get(ctx, id)
 }
 
@@ -201,6 +213,15 @@ func (s *Service) Get(ctx context.Context, id int64) (*domain.Problem, error) {
 		return nil, mapRepoErr(err)
 	}
 	return p, nil
+}
+
+// Projects returns every distinct project name in use (for filter dropdowns).
+func (s *Service) Projects(ctx context.Context) ([]string, error) {
+	names, err := s.repo.DistinctProjects(ctx)
+	if err != nil {
+		return nil, httpx.NewInternal(err)
+	}
+	return names, nil
 }
 
 // Delete removes a problem and its children (cascade).

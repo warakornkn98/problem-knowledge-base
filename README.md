@@ -170,7 +170,20 @@ All endpoints except `/auth/*`, `/meta/*` and `/health` require
 | 1 | Project setup, DB, migrations, models, CRUD problem/category/tag | ✅ done |
 | 2 | Steps, search, filter, pagination, sorting | ✅ done |
 | 2 | Auth (JWT + users) — pulled forward from Phase 4 | ✅ done |
-| 3 | Dashboard, similar problems, related problems | ✅ done (API) |
-| 3 | Frontend (Vue + Naive UI) | 🚧 in progress |
-| 4 | User management, audit log | ⏳ |
-| 5 | Advanced search tuning, KB improvements | ⏳ |
+| 3 | Dashboard, similar problems, related problems | ✅ done |
+| 3 | Frontend — Vue 3 + Naive UI (dashboard, problems, detail, form, search, categories, tags) | ✅ done |
+| 4 | User management, audit log (`updated_by` already captured) | ⏳ |
+| 5 | Advanced full-text tuning, Thai dictionary, KB improvements | ⏳ |
+
+## Screens
+
+- **Dashboard** — counters, most-common categories & projects, recurring errors
+- **Problems** — data table with server-side search / filter / sort / pagination
+- **Problem detail** — description, copyable error block, root cause, solution,
+  numbered troubleshooting steps, prevention; sidebar with tags, audit info,
+  auto-computed *similar problems* and manual *related problems*
+- **New / Edit problem** — full form with dynamic, reorderable steps; the minimum
+  for a quick capture is title + project + environment + category
+- **Search** — dedicated relevance-ranked search with a faceted sidebar
+  (status / severity / environment / category / project / tag, with counts)
+- **Categories / Tags** — inline CRUD

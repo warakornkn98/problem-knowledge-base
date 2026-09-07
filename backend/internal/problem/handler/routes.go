@@ -10,6 +10,7 @@ func (h *Handler) Register(r fiber.Router, write ...fiber.Handler) {
 	// Read
 	g.Get("/", h.list)
 	g.Get("/search", h.search)
+	g.Get("/projects", h.projects)
 	g.Get("/:id", h.get)
 	g.Get("/:id/similar", h.similar)
 	g.Get("/:id/steps", h.listSteps)

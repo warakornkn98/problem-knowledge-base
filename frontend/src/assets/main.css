@@ -1,0 +1,46 @@
+:root {
+  --pkb-mono: 'Fira Code', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+    Consolas, 'Liberation Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: #f5f6f8;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Monospace, wrapped, copyable error / command blocks. */
+.pkb-code {
+  font-family: var(--pkb-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+.pkb-muted {
+  color: #8a8f98;
+}
+
+mark {
+  background: #fff3b0;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}

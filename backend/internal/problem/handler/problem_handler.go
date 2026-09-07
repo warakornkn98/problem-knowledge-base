@@ -60,6 +60,17 @@ func (h *Handler) search(c *fiber.Ctx) error {
 	return h.list(c)
 }
 
+func (h *Handler) projects(c *fiber.Ctx) error {
+	names, err := h.svc.Projects(c.Context())
+	if err != nil {
+		return httpx.Fail(c, err)
+	}
+	if names == nil {
+		names = []string{}
+	}
+	return httpx.OK(c, names)
+}
+
 func (h *Handler) get(c *fiber.Ctx) error {
 	id, err := c.ParamsInt("id")
 	if err != nil {
@@ -85,23 +96,36 @@ func (h *Handler) similar(c *fiber.Ctx) error {
 }
 
 type writeRequest struct {
-	Title        string   `json:"title"`
-	Description  string   `json:"description"`
-	ErrorMessage string   `json:"error_message"`
-	CategoryID   int64    `json:"category_id"`
-	Severity     string   `json:"severity"`
-	Status       string   `json:"status"`
-	Environment  string   `json:"environment"`
-	Project      string   `json:"project"`
-	RootCause    string   `json:"root_cause"`
-	Solution     string   `json:"solution"`
-	Prevention   string   `json:"prevention"`
-	TagIDs       []int64  `json:"tag_ids"`
-	Tags         []string `json:"tags"`
-	Steps        []struct {
-		Action string `json:"action"`
-		Result string `json:"result"`
-	} `json:"steps"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description"`
+	ErrorMessage string         `json:"error_message"`
+	CategoryID   int64          `json:"category_id"`
+	Severity     string         `json:"severity"`
+	Status       string         `json:"status"`
+	Environment  string         `json:"environment"`
+	Project      string         `json:"project"`
+	RootCause    string         `json:"root_cause"`
+	Solution     string         `json:"solution"`
+	Prevention   string         `json:"prevention"`
+	TagIDs       []int64        `json:"tag_ids"`
+	Tags         []string       `json:"tags"`
+	Steps        *[]stepPayload `json:"steps"`
+}
+
+type stepPayload struct {
+	Action string `json:"action"`
+	Result string `json:"result"`
+}
+
+func (r writeRequest) stepInputs() []application.StepInput {
+	if r.Steps == nil {
+		return nil
+	}
+	out := make([]application.StepInput, 0, len(*r.Steps))
+	for _, s := range *r.Steps {
+		out = append(out, application.StepInput{Action: s.Action, Result: s.Result})
+	}
+	return out
 }
 
 func (r writeRequest) toInput(actorID int64) application.WriteInput {
@@ -136,10 +160,7 @@ func (h *Handler) create(c *fiber.Ctx) error {
 	}
 	actor := authx.MustUserID(c)
 
-	steps := make([]application.StepInput, 0, len(req.Steps))
-	for _, s := range req.Steps {
-		steps = append(steps, application.StepInput{Action: s.Action, Result: s.Result})
-	}
+	steps := req.stepInputs()
 	// On create, absent tag arrays still mean "no tags".
 	in := req.toInput(actor)
 	if req.TagIDs == nil {
@@ -165,7 +186,14 @@ func (h *Handler) update(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return httpx.Error(c, fiber.StatusBadRequest, "invalid JSON body")
 	}
-	p, err := h.svc.Update(c.Context(), int64(id), req.toInput(authx.MustUserID(c)))
+
+	var steps *[]application.StepInput
+	if req.Steps != nil {
+		s := req.stepInputs()
+		steps = &s
+	}
+
+	p, err := h.svc.Update(c.Context(), int64(id), req.toInput(authx.MustUserID(c)), steps)
 	if err != nil {
 		return httpx.Fail(c, err)
 	}

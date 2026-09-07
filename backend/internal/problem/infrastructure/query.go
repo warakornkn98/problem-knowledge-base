@@ -125,12 +125,14 @@ func (r *ProblemRepository) List(ctx context.Context, q domain.ListQuery) (domai
 	selectExpr := selectColumns
 	var selectArgs []any
 	if search != "" {
+		// Highlight markers are neutral sentinels; the API/DTO layer HTML-escapes
+		// the fragment and only then swaps them for <mark> tags.
 		selectExpr += `,
 			ts_rank(p.search_vector, websearch_to_tsquery('english', ?)) AS rank,
 			ts_headline('english',
 				coalesce(nullif(p.error_message, ''), nullif(p.description, ''), p.title),
 				websearch_to_tsquery('english', ?),
-				'StartSel=<mark>,StopSel=</mark>,MaxFragments=2,MinWords=4,MaxWords=18'
+				'StartSel=[[hl]],StopSel=[[/hl]],MaxFragments=2,MinWords=4,MaxWords=18'
 			) AS headline`
 		selectArgs = append(selectArgs, search, search)
 	}
@@ -165,19 +167,33 @@ func (r *ProblemRepository) List(ctx context.Context, q domain.ListQuery) (domai
 	return domain.ListResult{Items: items, Total: total}, nil
 }
 
-// FindSimilar ranks other problems against this problem's own searchable text.
+// FindSimilar suggests related problems using the signals the spec calls for:
+// shared tags, same category, same project, and a full-text overlap on the
+// source problem's title + error message. Results are scored by a weighted sum
+// of those signals so a partial match still surfaces.
 func (r *ProblemRepository) FindSimilar(ctx context.Context, problemID int64, limit int) ([]domain.ListItem, error) {
-	// Build a tsquery from the source problem's title + error + tags.
-	var seed string
+	var src struct {
+		CategoryID   int64
+		Project      string
+		Title        string
+		ErrorMessage string
+	}
 	if err := r.db.WithContext(ctx).
-		Raw(`SELECT coalesce(title,'') || ' ' || coalesce(error_message,'') || ' ' || coalesce(tags_cached,'')
-		     FROM problems WHERE id = ?`, problemID).
-		Scan(&seed).Error; err != nil {
+		Table("problems").
+		Select("category_id, project, title, error_message").
+		Where("id = ?", problemID).
+		Scan(&src).Error; err != nil {
 		return nil, err
 	}
-	seed = strings.TrimSpace(seed)
-	if seed == "" {
+	if src.CategoryID == 0 {
 		return []domain.ListItem{}, nil
+	}
+
+	args := map[string]any{
+		"src":  problemID,
+		"cat":  src.CategoryID,
+		"proj": src.Project,
+		"seed": nullSeed(strings.TrimSpace(src.Title + " " + src.ErrorMessage)),
 	}
 
 	var rows []joinedListRow
@@ -185,10 +201,24 @@ func (r *ProblemRepository) FindSimilar(ctx context.Context, problemID int64, li
 		Table("problems AS p").
 		Joins("JOIN problem_categories c ON c.id = p.category_id").
 		Select(selectColumns+`,
-			ts_rank(p.search_vector, plainto_tsquery('english', ?)) AS rank,
-			'' AS headline`, seed).
-		Where("p.id <> ?", problemID).
-		Where("p.search_vector @@ plainto_tsquery('english', ?)", seed).
+			(
+				3 * (SELECT count(*) FROM problem_tags pt
+				     WHERE pt.problem_id = p.id
+				       AND pt.tag_id IN (SELECT tag_id FROM problem_tags WHERE problem_id = @src))
+				+ CASE WHEN p.category_id = @cat THEN 2 ELSE 0 END
+				+ CASE WHEN p.project = @proj THEN 2 ELSE 0 END
+				+ 4 * ts_rank(p.search_vector, websearch_to_tsquery('english', @seed))
+			) AS rank,
+			'' AS headline`, args).
+		Where("p.id <> @src", args).
+		Where(`(
+			p.category_id = @cat
+			OR p.project = @proj
+			OR p.search_vector @@ websearch_to_tsquery('english', @seed)
+			OR EXISTS (SELECT 1 FROM problem_tags pt
+			           WHERE pt.problem_id = p.id
+			             AND pt.tag_id IN (SELECT tag_id FROM problem_tags WHERE problem_id = @src))
+		)`, args).
 		Order("rank DESC, p.created_at DESC").
 		Limit(limit).
 		Scan(&rows).Error
@@ -200,10 +230,20 @@ func (r *ProblemRepository) FindSimilar(ctx context.Context, problemID int64, li
 	ids := make([]int64, len(rows))
 	for i, row := range rows {
 		items[i] = row.toListItem()
+		items[i].Rank = 0 // internal score, not meaningful to clients
 		ids[i] = row.ID
 	}
 	r.attachTags(ctx, items, ids)
 	return items, nil
+}
+
+// nullSeed avoids passing an empty string to websearch_to_tsquery (which would
+// just never match); a single space is harmless.
+func nullSeed(s string) string {
+	if s == "" {
+		return " "
+	}
+	return s
 }
 
 // attachTags batch-loads tags for a set of problems and assigns them onto items.

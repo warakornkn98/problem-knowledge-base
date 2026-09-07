@@ -124,14 +124,22 @@ func (r *Repository) List(ctx context.Context, withCounts bool) ([]domain.Catego
 		return out, nil
 	}
 
+	// Flat scan target: GORM does not reliably flatten an embedded struct when
+	// scanning an aggregate query, so list every column explicitly.
 	type row struct {
-		categoryModel
+		ID           int64
+		Name         string
+		Slug         string
+		Description  string
+		Color        string
+		CreatedAt    time.Time
+		UpdatedAt    time.Time
 		ProblemCount int64
 	}
 	var rows []row
 	err := r.db.WithContext(ctx).
 		Table("problem_categories AS c").
-		Select("c.*, COUNT(p.id) AS problem_count").
+		Select("c.id, c.name, c.slug, c.description, c.color, c.created_at, c.updated_at, COUNT(p.id) AS problem_count").
 		Joins("LEFT JOIN problems p ON p.category_id = c.id").
 		Group("c.id").
 		Order("c.name ASC").
@@ -141,9 +149,16 @@ func (r *Repository) List(ctx context.Context, withCounts bool) ([]domain.Catego
 	}
 	out := make([]domain.Category, len(rows))
 	for i, rw := range rows {
-		c := rw.categoryModel.toDomain()
-		c.ProblemCount = rw.ProblemCount
-		out[i] = c
+		out[i] = domain.Category{
+			ID:           rw.ID,
+			Name:         rw.Name,
+			Slug:         rw.Slug,
+			Description:  rw.Description,
+			Color:        rw.Color,
+			CreatedAt:    rw.CreatedAt,
+			UpdatedAt:    rw.UpdatedAt,
+			ProblemCount: rw.ProblemCount,
+		}
 	}
 	return out, nil
 }
